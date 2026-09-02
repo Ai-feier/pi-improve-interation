@@ -122,11 +122,12 @@ export function mergeAgentEntries(...groups: AgentEntry[][]): AgentEntry[] {
 	for (const group of groups) {
 		for (const entry of group) {
 			const existing = byName.get(entry.name);
-			byName.set(entry.name, {
-				...existing,
-				...entry,
-				description: entry.description ?? existing?.description,
-			});
+			const merged: AgentEntry = { ...existing, ...entry };
+			const description = entry.description ?? existing?.description;
+			if (description !== undefined) {
+				merged.description = description;
+			}
+			byName.set(entry.name, merged);
 		}
 	}
 	return [...byName.values()];
