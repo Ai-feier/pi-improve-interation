@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -15,6 +15,8 @@ import { homedir } from "node:os";
 export interface AgentEntry {
 	name: string;
 	source: "builtin" | "custom" | "runtime";
+	/** Frontmatter description from the agent's md file, when present. */
+	description?: string;
 }
 
 /** Core builtins, used when the installed package's agents/ dir cannot be read. */
@@ -27,16 +29,59 @@ const CORE_BUILTIN_AGENTS = [
 	"worker",
 ] as const;
 
-/** Scan an agents directory; every *.md file is one agent named by its stem. */
-export async function scanAgentsDir(dir: string, source: AgentEntry["source"]): Promise<AgentEntry[]> {
+/**
+ * Minimal frontmatter parsing: single-line `key: value` pairs between `---`
+ * fences. Block scalars (YAML `>-`) are not expanded — agent frontmatter in
+ * practice uses single-line names and descriptions.
+ */
+function parseFrontmatter(content: string): Record<string, string> {
+	const fence = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
+	if (!fence?.[1]) {
+		return {};
+	}
+	const fields: Record<string, string> = {};
+	for (const line of fence[1].split(/\r?\n/)) {
+		const pair = /^(\w[\w-]*):\s*(.*)$/.exec(line.trim());
+		const key = pair?.[1];
+		const value = pair?.[2];
+		if (!key || value === undefined) {
+			continue;
+		}
+		fields[key] = value.replace(/^['"]|['"]$/g, "").trim();
+	}
+	return fields;
+}
+
+/**
+ * Scan an agents directory; every *.md file is one agent. Name and description
+ * come from frontmatter when present, falling back to the file stem.
+ */
+export async function scanAgentsDir(
+	dir: string,
+	source: AgentEntry["source"],
+): Promise<AgentEntry[]> {
+	let files: string[];
 	try {
-		const files = await readdir(dir);
-		return files
-			.filter((file) => file.endsWith(".md"))
-			.map((file) => ({ name: basename(file, ".md"), source }));
+		files = (await readdir(dir)).filter((file) => file.endsWith(".md"));
 	} catch {
 		return [];
 	}
+	const entries = await Promise.all(
+		files.map(async (file) => {
+			const stem = basename(file, ".md");
+			try {
+				const frontmatter = parseFrontmatter(await readFile(join(dir, file), "utf8"));
+				return {
+					name: frontmatter.name || stem,
+					source,
+					description: frontmatter.description || undefined,
+				};
+			} catch {
+				return { name: stem, source };
+			}
+		}),
+	);
+	return entries;
 }
 
 /** Builtins from the bundled pi-subagents package; falls back to the core six. */
@@ -47,7 +92,10 @@ export async function listBuiltinAgents(): Promise<AgentEntry[]> {
 		// "." export resolves to the package root's index.ts; resolve() only
 		// computes the path, it never executes the .ts entry.
 		const entryPath = createRequire(import.meta.url).resolve("pi-subagents");
-		const agents = await scanAgentsDir(join(dirname(entryPath), "agents"), "builtin");
+		const agents = await scanAgentsDir(
+			join(dirname(entryPath), "agents"),
+			"builtin",
+		);
 		return agents.length > 0 ? agents : fallback();
 	} catch {
 		return fallback();
@@ -55,7 +103,9 @@ export async function listBuiltinAgents(): Promise<AgentEntry[]> {
 }
 
 /** Custom agents: ~/.pi/agent/agents (global) and <projectCwd>/.pi/agents (project). */
-export async function listCustomAgents(projectCwd: string): Promise<AgentEntry[]> {
+export async function listCustomAgents(
+	projectCwd: string,
+): Promise<AgentEntry[]> {
 	const [globalAgents, projectAgents] = await Promise.all([
 		scanAgentsDir(join(homedir(), ".pi", "agent", "agents"), "custom"),
 		scanAgentsDir(join(projectCwd, ".pi", "agents"), "custom"),
@@ -63,12 +113,20 @@ export async function listCustomAgents(projectCwd: string): Promise<AgentEntry[]
 	return [...projectAgents, ...globalAgents];
 }
 
-/** Merge agent groups by name; each group overrides same-named entries from earlier groups. */
+/**
+ * Merge agent groups by name; each group overrides same-named entries from
+ * earlier groups. An entry without a description inherits the one it overrides.
+ */
 export function mergeAgentEntries(...groups: AgentEntry[][]): AgentEntry[] {
 	const byName = new Map<string, AgentEntry>();
 	for (const group of groups) {
 		for (const entry of group) {
-			byName.set(entry.name, entry);
+			const existing = byName.get(entry.name);
+			byName.set(entry.name, {
+				...existing,
+				...entry,
+				description: entry.description ?? existing?.description,
+			});
 		}
 	}
 	return [...byName.values()];

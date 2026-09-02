@@ -27,12 +27,17 @@ export function buildDelegationPrompt(agentName: string, task: string): string {
 		: `Use ${agentName} on the current context: decide the most useful task for that agent and delegate it via the subagent tool. Ask me first if the scope is unclear.`;
 }
 
-async function discoverAgents(runtimeAgentNames: ReadonlySet<string>): Promise<AgentEntry[]> {
+async function discoverAgents(
+	runtimeAgentNames: ReadonlySet<string>,
+): Promise<AgentEntry[]> {
 	const [builtins, customs] = await Promise.all([
 		listBuiltinAgents(),
 		listCustomAgents(process.cwd()),
 	]);
-	const runtime: AgentEntry[] = [...runtimeAgentNames].map((name) => ({ name, source: "runtime" }));
+	const runtime: AgentEntry[] = [...runtimeAgentNames].map((name) => ({
+		name,
+		source: "runtime",
+	}));
 	return mergeAgentEntries(builtins, customs, runtime);
 }
 
@@ -44,7 +49,9 @@ async function registerAgentCommands(
 	const agents = await discoverAgents(runtimeAgentNames);
 	for (const agent of agents) {
 		pi.registerCommand(`agent:${agent.name}`, {
-			description: `${agent.source} agent — delegate to ${agent.name} (main session dispatches via the subagent tool)`,
+			description: agent.description
+				? `${agent.source} agent — ${agent.description}`
+				: `${agent.source} agent — delegate to ${agent.name} via the subagent tool`,
 			handler: async (args, _ctx) => {
 				const task = typeof args === "string" ? args : "";
 				await pi.sendUserMessage(buildDelegationPrompt(agent.name, task), {
@@ -63,7 +70,8 @@ async function registerAgentCommands(
  */
 export default function registerPlusExtension(pi: ExtensionAPI): void {
 	pi.registerCommand("plus-doctor", {
-		description: "Diagnose pi-improve-interation wiring: adapter registry and host package availability",
+		description:
+			"Diagnose pi-improve-interation wiring: adapter registry and host package availability",
 		handler: async (_args, ctx) => {
 			const lines: DoctorLine[] = await runDoctor();
 			const allOk = lines.every((line) => line.level !== "fail");
@@ -92,7 +100,11 @@ export default function registerPlusExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			ctx.ui.notify(
-				agents.map((agent) => `${agent.name} (${agent.source})`).join("\n"),
+				agents
+					.map((agent) =>
+						`${agent.name} (${agent.source})${agent.description ? ` — ${agent.description}` : ""}`,
+					)
+					.join("\n"),
 				"info",
 			);
 		},
