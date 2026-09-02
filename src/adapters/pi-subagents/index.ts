@@ -12,7 +12,7 @@ import type { AdapterProbeResult, PluginAdapter } from "../types.ts";
  * - Runtime agent registration: `registerAgent` via pi-subagents/agents.
  * - Shared types: pi-subagents/shared-types.
  */
-export const PI_SUBAGENTS_EXPECTED_REQUEST_EVENT = "prompt-template:subagent:request";
+const PI_SUBAGENTS_EXPECTED_REQUEST_EVENT = "prompt-template:subagent:request";
 
 export const piSubagentsAdapter: PluginAdapter = {
 	id: "pi-subagents",

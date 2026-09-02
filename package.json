@@ -1,5 +1,5 @@
 {
-  "name": "pi-subagents-plus",
+  "name": "pi-improve-interation",
   "version": "0.1.0",
   "description": "Companion enhancement layer over pi-subagents (and future open-source pi packages) — adapter framework for orchestration add-ons, no fork required",
   "type": "module",
@@ -7,7 +7,7 @@
   "author": "Ai-feier",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Ai-feier/pi-subagents-plus.git"
+    "url": "git+https://github.com/Ai-feier/pi-improve-interation.git"
   },
   "keywords": [
     "pi-package",

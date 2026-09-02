@@ -1,4 +1,4 @@
-# pi-subagents-plus
+# pi-improve-interation
 
 Companion enhancement layer over [pi-subagents](https://github.com/nicobailon/pi-subagents) — and, over time, other open-source pi packages. Secondary development **without forking**: this package installs alongside the host plugins and builds on their public extension APIs.
 
@@ -8,7 +8,7 @@ pi-subagents ships a deliberate extension surface (delegation event transport, r
 
 ## Architecture
 
-```
+```text
 extensions/plus.ts          pi extension entry (registers /plus-doctor; more commands over time)
 src/adapters/types.ts       PluginAdapter contract — one adapter per enhanced host package
 src/adapters/index.ts       adapter registry
@@ -21,7 +21,7 @@ Adding an enhanced plugin = implementing one `PluginAdapter` and appending it to
 ## Install (local development)
 
 ```bash
-pi install /Users/apple/open/pi-subagents-plus
+pi install /Users/apple/open/pi-improve-interation
 ```
 
 Requires [pi-subagents](https://github.com/nicobailon/pi-subagents) to be installed as a pi package (`pi install npm:pi-subagents`).
