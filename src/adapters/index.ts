@@ -9,5 +9,5 @@ import { piSubagentsAdapter } from "./pi-subagents/index.ts";
 export const adapters: readonly PluginAdapter[] = [piSubagentsAdapter];
 
 export function getAdapter(id: string): PluginAdapter | undefined {
-	return adapters.find((adapter) => adapter.id === id);
+ return adapters.find((adapter) => adapter.id === id);
 }

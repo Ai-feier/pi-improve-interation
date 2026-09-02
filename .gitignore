@@ -1,4 +1,4 @@
-.pi/
+.pi/tasks/
 node_modules/
 *.log
 .DS_Store

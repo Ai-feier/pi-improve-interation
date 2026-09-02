@@ -29,7 +29,10 @@ export const piSubagentsAdapter: PluginAdapter = {
 			};
 		}
 
-		if (delegation.SUBAGENT_DELEGATION_REQUEST_EVENT !== PI_SUBAGENTS_EXPECTED_REQUEST_EVENT) {
+		if (
+			delegation.SUBAGENT_DELEGATION_REQUEST_EVENT !==
+			PI_SUBAGENTS_EXPECTED_REQUEST_EVENT
+		) {
 			return {
 				ok: false,
 				detail: `delegation event constant drifted: expected "${PI_SUBAGENTS_EXPECTED_REQUEST_EVENT}", got "${String(delegation.SUBAGENT_DELEGATION_REQUEST_EVENT)}". Check the installed pi-subagents version against this adapter.`,
@@ -38,7 +41,8 @@ export const piSubagentsAdapter: PluginAdapter = {
 
 		return {
 			ok: true,
-			detail: "delegation event transport resolved; extension-to-extension delegation available",
+			detail:
+				"delegation event transport resolved; extension-to-extension delegation available",
 		};
 	},
 };

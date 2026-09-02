@@ -11,7 +11,10 @@ export interface DoctorLine {
  */
 export async function runDoctor(): Promise<DoctorLine[]> {
 	const lines: DoctorLine[] = [
-		{ level: "info", text: `pi-subagents-plus doctor — ${adapters.length} adapter(s) registered` },
+		{
+			level: "info",
+			text: `pi-subagents-plus doctor — ${adapters.length} adapter(s) registered`,
+		},
 	];
 
 	for (const adapter of adapters) {
