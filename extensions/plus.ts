@@ -6,6 +6,7 @@ import {
 	mergeAgentEntries,
 	type AgentEntry,
 } from "../src/adapters/pi-subagents/agents.ts";
+import { createAgentAutocompleteProvider } from "../src/adapters/pi-subagents/autocomplete.ts";
 
 /**
  * pi-subagents runtime agent registration event (pi-subagents:runtime-agent-register:v1).
@@ -83,12 +84,23 @@ export default function registerPlusExtension(pi: ExtensionAPI): void {
 	});
 
 	const runtimeAgentNames = new Set<string>();
+	let cachedAgents: Promise<AgentEntry[]> | null = null;
+	const getAgents = (): Promise<AgentEntry[]> =>
+		(cachedAgents ??= discoverAgents(runtimeAgentNames));
+
 	pi.events.on(RUNTIME_AGENT_REGISTER_EVENT, (payload: unknown) => {
 		const name = (payload as { name?: unknown } | null | undefined)?.name;
 		if (typeof name === "string" && name.length > 0) {
 			runtimeAgentNames.add(name);
+			cachedAgents = null;
 			void registerAgentCommands(pi, runtimeAgentNames);
 		}
+	});
+
+	pi.on("session_start", (_event, ctx) => {
+		ctx.ui.addAutocompleteProvider((current) =>
+			createAgentAutocompleteProvider(current, getAgents),
+		);
 	});
 
 	pi.registerCommand("agent", {
@@ -101,8 +113,9 @@ export default function registerPlusExtension(pi: ExtensionAPI): void {
 			}
 			ctx.ui.notify(
 				agents
-					.map((agent) =>
-						`${agent.name} (${agent.source})${agent.description ? ` — ${agent.description}` : ""}`,
+					.map(
+						(agent) =>
+							`${agent.name} (${agent.source})${agent.description ? ` — ${agent.description}` : ""}`,
 					)
 					.join("\n"),
 				"info",

@@ -11,6 +11,8 @@ import {
 import registerPlusExtension, {
 	buildDelegationPrompt,
 } from "../extensions/plus.ts";
+import { createAgentAutocompleteProvider } from "../src/adapters/pi-subagents/autocomplete.ts";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
 function flush(ms = 50): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -36,15 +38,18 @@ test("scanAgentsDir reads frontmatter name/description and tolerates missing dir
 	await writeFile(join(dir, "bare.md"), "no frontmatter here");
 	await writeFile(join(dir, "notes.txt"), "ignored");
 	const agents = await scanAgentsDir(dir, "custom");
-	assert.deepEqual(
-		agents.map((agent) => agent.name).sort(),
-		["bare", "my-agent"],
-	);
+	assert.deepEqual(agents.map((agent) => agent.name).sort(), [
+		"bare",
+		"my-agent",
+	]);
 	assert.equal(
 		agents.find((agent) => agent.name === "my-agent")?.description,
 		"Does things well",
 	);
-	assert.equal(agents.find((agent) => agent.name === "bare")?.description, undefined);
+	assert.equal(
+		agents.find((agent) => agent.name === "bare")?.description,
+		undefined,
+	);
 	assert.deepEqual(await scanAgentsDir(join(dir, "missing"), "custom"), []);
 });
 
@@ -87,6 +92,7 @@ function makePi() {
 			commands.set(name, options);
 		},
 		events: { on: () => {} },
+		on: () => {},
 		sendUserMessage: async (content: string) => {
 			sent.push(content);
 		},
@@ -124,4 +130,61 @@ test("agent command injects the delegation prompt into the main session", async 
 	assert.ok(reviewer);
 	await reviewer.handler("review my diff", {});
 	assert.deepEqual(sent, ["Use reviewer to review my diff."]);
+});
+
+function makeCurrent() {
+	const calls: string[] = [];
+	return {
+		calls,
+		provider: {
+			getSuggestions: async () => {
+				calls.push("suggestions");
+				return null;
+			},
+			applyCompletion: () => {
+				calls.push("apply");
+				return { lines: [], cursorLine: 0, cursorCol: 0 };
+			},
+		},
+	};
+}
+
+const AUTOCOMPLETE_OPTIONS = { signal: new AbortController().signal };
+
+const AUTOCOMPLETE_AGENTS = [
+	{ name: "reviewer", source: "builtin" as const, description: "Review specialist" },
+	{ name: "scout", source: "builtin" as const },
+];
+
+async function getTestAgents(): Promise<typeof AUTOCOMPLETE_AGENTS> {
+	return AUTOCOMPLETE_AGENTS;
+}
+
+test("@ provider lists matching agents with descriptions", async () => {
+	const { provider: current } = makeCurrent();
+	const provider = createAgentAutocompleteProvider(current, getTestAgents);
+	const result = await provider.getSuggestions(["@rev"], 0, 4, AUTOCOMPLETE_OPTIONS);
+	assert.equal(result?.prefix, "@rev");
+	assert.deepEqual(
+		result?.items.map((item) => item.value),
+		["@agent:reviewer"],
+	);
+	assert.equal(result?.items[0]?.description, "Review specialist");
+	assert.equal(result?.items[0]?.label, "@agent:reviewer");
+});
+
+test("@ provider falls back to built-in completion outside agent mentions", async () => {
+	const { calls, provider: current } = makeCurrent();
+	const provider = createAgentAutocompleteProvider(current, getTestAgents);
+	await provider.getSuggestions(["@"], 0, 1, AUTOCOMPLETE_OPTIONS);
+	await provider.getSuggestions(["@zzz"], 0, 4, AUTOCOMPLETE_OPTIONS);
+	await provider.getSuggestions(["plain text"], 0, 10, AUTOCOMPLETE_OPTIONS);
+	assert.deepEqual(calls, ["suggestions", "suggestions", "suggestions"]);
+});
+
+test("@ provider applyCompletion delegates to the built-in provider", () => {
+	const { calls, provider: current } = makeCurrent();
+	const provider = createAgentAutocompleteProvider(current, getTestAgents);
+	provider.applyCompletion([], 0, 0, {} as AutocompleteItem, "@rev");
+	assert.deepEqual(calls, ["apply"]);
 });

@@ -70,7 +70,9 @@ export async function scanAgentsDir(
 		files.map(async (file) => {
 			const stem = basename(file, ".md");
 			try {
-				const frontmatter = parseFrontmatter(await readFile(join(dir, file), "utf8"));
+				const frontmatter = parseFrontmatter(
+					await readFile(join(dir, file), "utf8"),
+				);
 				return {
 					name: frontmatter.name || stem,
 					source,
