@@ -1,0 +1,55 @@
+{
+  "name": "pi-subagents-plus",
+  "version": "0.1.0",
+  "description": "Companion enhancement layer over pi-subagents (and future open-source pi packages) — adapter framework for orchestration add-ons, no fork required",
+  "type": "module",
+  "license": "MIT",
+  "author": "Ai-feier",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ai-feier/pi-subagents-plus.git"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "pi-subagents",
+    "subagents",
+    "orchestration",
+    "agents"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/*.test.ts\"",
+    "test:watch": "node --test --watch \"test/*.test.ts\""
+  },
+  "dependencies": {
+    "pi-subagents": "^0.62.0"
+  },
+  "bundledDependencies": [
+    "pi-subagents"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@types/node": "^24",
+    "typescript": "^5.7.0"
+  },
+  "files": [
+    "extensions",
+    "src",
+    "test",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  }
+}
