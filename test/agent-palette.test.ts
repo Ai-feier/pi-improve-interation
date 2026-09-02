@@ -8,15 +8,10 @@ import {
 	scanAgentsDir,
 	mergeAgentEntries,
 } from "../src/adapters/pi-subagents/agents.ts";
-import registerPlusExtension, {
-	buildDelegationPrompt,
-} from "../extensions/plus.ts";
+import { buildDelegationInstruction } from "../src/commands/delegation.ts";
+import registerPlusExtension from "../extensions/plus.ts";
 import { createAgentAutocompleteProvider } from "../src/adapters/pi-subagents/autocomplete.ts";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
-
-function flush(ms = 50): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 test("builtin agents resolve from the bundled pi-subagents package", async () => {
 	const agents = await listBuiltinAgents();
@@ -38,18 +33,15 @@ test("scanAgentsDir reads frontmatter name/description and tolerates missing dir
 	await writeFile(join(dir, "bare.md"), "no frontmatter here");
 	await writeFile(join(dir, "notes.txt"), "ignored");
 	const agents = await scanAgentsDir(dir, "custom");
-	assert.deepEqual(agents.map((agent) => agent.name).sort(), [
-		"bare",
-		"my-agent",
-	]);
+	assert.deepEqual(
+		agents.map((agent) => agent.name).sort(),
+		["bare", "my-agent"],
+	);
 	assert.equal(
 		agents.find((agent) => agent.name === "my-agent")?.description,
 		"Does things well",
 	);
-	assert.equal(
-		agents.find((agent) => agent.name === "bare")?.description,
-		undefined,
-	);
+	assert.equal(agents.find((agent) => agent.name === "bare")?.description, undefined);
 	assert.deepEqual(await scanAgentsDir(join(dir, "missing"), "custom"), []);
 });
 
@@ -68,68 +60,15 @@ test("mergeAgentEntries: later groups override earlier by name", () => {
 	]);
 });
 
-test("buildDelegationPrompt: with task and without task", () => {
-	assert.equal(
-		buildDelegationPrompt("reviewer", "  review my diff  "),
-		"Use reviewer to review my diff.",
-	);
-	assert.match(
-		buildDelegationPrompt("scout", ""),
-		/^Use scout on the current context.*subagent tool/s,
-	);
-});
+test("buildDelegationInstruction: with task and without task", () => {
+	const withTask = buildDelegationInstruction("reviewer", "  review my diff  ");
+	assert.match(withTask, /^Delegate to the reviewer subagent via the subagent tool\./);
+	assert.match(withTask, /Task: review my diff/);
+	assert.match(withTask, /decide the exact child prompt yourself/);
 
-type CmdOptions = {
-	description: string;
-	handler: (args: string, ctx: unknown) => Promise<void> | void;
-};
-
-function makePi() {
-	const commands = new Map<string, CmdOptions>();
-	const sent: string[] = [];
-	const pi = {
-		registerCommand: (name: string, options: CmdOptions) => {
-			commands.set(name, options);
-		},
-		events: { on: () => {} },
-		on: () => {},
-		sendUserMessage: async (content: string) => {
-			sent.push(content);
-		},
-	};
-	return {
-		commands,
-		sent,
-		pi: pi as unknown as Parameters<typeof registerPlusExtension>[0],
-	};
-}
-
-test("extension registers doctor, listing, and per-agent commands", async () => {
-	const { commands, pi } = makePi();
-	registerPlusExtension(pi);
-	assert.ok(commands.has("plus-doctor"));
-	assert.ok(commands.has("agent"));
-	await flush();
-	const names = [...commands.keys()];
-	assert.ok(
-		names.includes("agent:scout"),
-		`expected agent:scout in ${names.join(",")}`,
-	);
-	const reviewer = commands.get("agent:reviewer");
-	assert.ok(reviewer, "expected agent:reviewer command");
-	assert.match(reviewer.description, /^builtin agent — /);
-	assert.doesNotMatch(reviewer.description, /delegate to/);
-	assert.ok(reviewer.description.length > "builtin agent — ".length);
-});
-
-test("agent command injects the delegation prompt into the main session", async () => {
-	const { commands, sent, pi } = makePi();
-	registerPlusExtension(pi);
-	await flush();
-	const reviewer = commands.get("agent:reviewer");
-	assert.ok(reviewer);
-	await reviewer.handler("review my diff", {});
-	assert.deepEqual(sent, ["Use reviewer to review my diff."]);
+	const withoutTask = buildDelegationInstruction("scout", "");
+	assert.match(withoutTask, /Task: not specified/);
+	assert.match(withoutTask, /ask me before delegating/);
 });
 
 function makeCurrent() {
@@ -187,4 +126,75 @@ test("@ provider applyCompletion delegates to the built-in provider", () => {
 	const provider = createAgentAutocompleteProvider(current, getTestAgents);
 	provider.applyCompletion([], 0, 0, {} as AutocompleteItem, "@rev");
 	assert.deepEqual(calls, ["apply"]);
+});
+
+type CmdOptions = {
+	description: string;
+	handler: (args: string, ctx: unknown) => Promise<void> | void;
+};
+
+function makePi() {
+	const commands = new Map<string, CmdOptions>();
+	const handlers = new Map<string, (event: { text: string }) => unknown>();
+	const sent: string[] = [];
+	const pi = {
+		registerCommand: (name: string, options: CmdOptions) => {
+			commands.set(name, options);
+		},
+		events: { on: () => {} },
+		on: (event: string, handler: (event: { text: string }) => unknown) => {
+			handlers.set(event, handler);
+		},
+		sendUserMessage: async (content: string) => {
+			sent.push(content);
+		},
+	};
+	return {
+		commands,
+		handlers,
+		sent,
+		pi: pi as unknown as Parameters<typeof registerPlusExtension>[0],
+	};
+}
+
+test("extension registers doctor and an input transformer (no /agent:* commands)", () => {
+	const { commands, handlers, pi } = makePi();
+	registerPlusExtension(pi);
+	assert.ok(commands.has("plus-doctor"));
+	assert.ok(![...commands.keys()].some((name) => name.startsWith("agent")));
+	assert.ok(handlers.has("input"), "expected the input event handler");
+	assert.ok(handlers.has("session_start"));
+});
+
+test("input handler transforms @agent: mentions into delegation instructions", () => {
+	const { handlers, pi } = makePi();
+	registerPlusExtension(pi);
+	const handler = handlers.get("input");
+	assert.ok(handler);
+
+	const transformed = handler({ text: "@agent:reviewer review my diff" }) as {
+		action: string;
+		text: string;
+	};
+	assert.equal(transformed.action, "transform");
+	assert.match(
+		transformed.text,
+		/^Delegate to the reviewer subagent via the subagent tool\./,
+	);
+	assert.match(transformed.text, /Task: review my diff/);
+	assert.doesNotMatch(transformed.text, /@agent:/);
+
+	const passthrough = handler({ text: "hello world" }) as { action: string };
+	assert.deepEqual(passthrough, { action: "continue" });
+});
+
+test("input handler keeps mention-less @ references untouched", () => {
+	const { handlers, pi } = makePi();
+	registerPlusExtension(pi);
+	const handler = handlers.get("input");
+	assert.ok(handler);
+	const result = handler({ text: "look at @src/auth.ts please" }) as {
+		action: string;
+	};
+	assert.deepEqual(result, { action: "continue" });
 });

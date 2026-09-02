@@ -1,6 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runDoctor, type DoctorLine } from "../src/commands/doctor.ts";
 import {
+	buildDelegationInstruction,
+	AGENT_MENTION_TOKEN_PATTERN,
+} from "../src/commands/delegation.ts";
+import {
 	listBuiltinAgents,
 	listCustomAgents,
 	mergeAgentEntries,
@@ -16,18 +20,6 @@ import { createAgentAutocompleteProvider } from "../src/adapters/pi-subagents/au
  */
 const RUNTIME_AGENT_REGISTER_EVENT = "pi-subagents:runtime-agent-register:v1";
 
-/**
- * Prompt injected into the main session. The main agent stays in charge: it
- * builds the real task prompt and dispatches it through pi-subagents'
- * `subagent` tool itself (user decision: message injection, not direct RPC).
- */
-export function buildDelegationPrompt(agentName: string, task: string): string {
-	const trimmed = task.trim();
-	return trimmed.length > 0
-		? `Use ${agentName} to ${trimmed}.`
-		: `Use ${agentName} on the current context: decide the most useful task for that agent and delegate it via the subagent tool. Ask me first if the scope is unclear.`;
-}
-
 async function discoverAgents(
 	runtimeAgentNames: ReadonlySet<string>,
 ): Promise<AgentEntry[]> {
@@ -42,32 +34,15 @@ async function discoverAgents(
 	return mergeAgentEntries(builtins, customs, runtime);
 }
 
-/** Register one /agent:<name> command per discovered agent (idempotent; later calls overwrite). */
-async function registerAgentCommands(
-	pi: ExtensionAPI,
-	runtimeAgentNames: ReadonlySet<string>,
-): Promise<void> {
-	const agents = await discoverAgents(runtimeAgentNames);
-	for (const agent of agents) {
-		pi.registerCommand(`agent:${agent.name}`, {
-			description: agent.description
-				? `${agent.source} agent — ${agent.description}`
-				: `${agent.source} agent — delegate to ${agent.name} via the subagent tool`,
-			handler: async (args, _ctx) => {
-				const task = typeof args === "string" ? args : "";
-				await pi.sendUserMessage(buildDelegationPrompt(agent.name, task), {
-					deliverAs: "followUp",
-				});
-			},
-		});
-	}
-}
-
 /**
  * pi-improve-interation — companion extension entry.
  *
  * Loads alongside pi-subagents (installed as its own pi package) and adds
  * orchestration enhancements through pi-subagents' public API surface.
+ *
+ * Agent entry point (only): typing "@" in the composer autocompletes agents;
+ * a sent message containing "@agent:<name>" is transformed, before agent
+ * processing, into an explicit delegation instruction for the main session.
  */
 export default function registerPlusExtension(pi: ExtensionAPI): void {
 	pi.registerCommand("plus-doctor", {
@@ -93,7 +68,6 @@ export default function registerPlusExtension(pi: ExtensionAPI): void {
 		if (typeof name === "string" && name.length > 0) {
 			runtimeAgentNames.add(name);
 			cachedAgents = null;
-			void registerAgentCommands(pi, runtimeAgentNames);
 		}
 	});
 
@@ -103,25 +77,17 @@ export default function registerPlusExtension(pi: ExtensionAPI): void {
 		);
 	});
 
-	pi.registerCommand("agent", {
-		description: "List agents available for /agent:<name> delegation",
-		handler: async (_args, ctx) => {
-			const agents = await discoverAgents(runtimeAgentNames);
-			if (agents.length === 0) {
-				ctx.ui.notify("No agents found. Fix: pi install npm:pi-subagents", "error");
-				return;
-			}
-			ctx.ui.notify(
-				agents
-					.map(
-						(agent) =>
-							`${agent.name} (${agent.source})${agent.description ? ` — ${agent.description}` : ""}`,
-					)
-					.join("\n"),
-				"info",
-			);
-		},
+	// Transform "@agent:<name> …" messages into explicit delegation
+	// instructions before the main agent sees them (pi "input" event).
+	pi.on("input", (event) => {
+		const match = AGENT_MENTION_TOKEN_PATTERN.exec(event.text);
+		if (!match?.[1]) {
+			return { action: "continue" };
+		}
+		const task = event.text.replace(match[0], " ").replace(/\s+/g, " ").trim();
+		return {
+			action: "transform",
+			text: buildDelegationInstruction(match[1], task),
+		};
 	});
-
-	void registerAgentCommands(pi, runtimeAgentNames);
 }
