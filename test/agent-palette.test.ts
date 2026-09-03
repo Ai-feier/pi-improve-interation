@@ -33,15 +33,18 @@ test("scanAgentsDir reads frontmatter name/description and tolerates missing dir
 	await writeFile(join(dir, "bare.md"), "no frontmatter here");
 	await writeFile(join(dir, "notes.txt"), "ignored");
 	const agents = await scanAgentsDir(dir, "custom");
-	assert.deepEqual(
-		agents.map((agent) => agent.name).sort(),
-		["bare", "my-agent"],
-	);
+	assert.deepEqual(agents.map((agent) => agent.name).sort(), [
+		"bare",
+		"my-agent",
+	]);
 	assert.equal(
 		agents.find((agent) => agent.name === "my-agent")?.description,
 		"Does things well",
 	);
-	assert.equal(agents.find((agent) => agent.name === "bare")?.description, undefined);
+	assert.equal(
+		agents.find((agent) => agent.name === "bare")?.description,
+		undefined,
+	);
 	assert.deepEqual(await scanAgentsDir(join(dir, "missing"), "custom"), []);
 });
 
@@ -62,7 +65,10 @@ test("mergeAgentEntries: later groups override earlier by name", () => {
 
 test("buildDelegationInstruction: with task and without task", () => {
 	const withTask = buildDelegationInstruction("reviewer", "  review my diff  ");
-	assert.match(withTask, /^Delegate to the reviewer subagent via the subagent tool\./);
+	assert.match(
+		withTask,
+		/^Delegate to the reviewer subagent via the subagent tool\./,
+	);
 	assert.match(withTask, /Task: review my diff/);
 	assert.match(withTask, /decide the exact child prompt yourself/);
 
@@ -91,7 +97,11 @@ function makeCurrent() {
 const AUTOCOMPLETE_OPTIONS = { signal: new AbortController().signal };
 
 const AUTOCOMPLETE_AGENTS = [
-	{ name: "reviewer", source: "builtin" as const, description: "Review specialist" },
+	{
+		name: "reviewer",
+		source: "builtin" as const,
+		description: "Review specialist",
+	},
 	{ name: "scout", source: "builtin" as const },
 ];
 
@@ -102,7 +112,12 @@ async function getTestAgents(): Promise<typeof AUTOCOMPLETE_AGENTS> {
 test("@ provider lists matching agents with descriptions", async () => {
 	const { provider: current } = makeCurrent();
 	const provider = createAgentAutocompleteProvider(current, getTestAgents);
-	const result = await provider.getSuggestions(["@rev"], 0, 4, AUTOCOMPLETE_OPTIONS);
+	const result = await provider.getSuggestions(
+		["@rev"],
+		0,
+		4,
+		AUTOCOMPLETE_OPTIONS,
+	);
 	assert.equal(result?.prefix, "@rev");
 	assert.deepEqual(
 		result?.items.map((item) => item.value),

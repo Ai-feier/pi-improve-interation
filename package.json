@@ -1,10 +1,11 @@
 {
   "name": "pi-improve-interation",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Companion enhancement layer over pi-subagents (and future open-source pi packages) — adapter framework for orchestration add-ons, no fork required",
   "type": "module",
   "license": "MIT",
   "author": "Ai-feier",
+  "homepage": "https://github.com/Ai-feier/pi-improve-interation#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Ai-feier/pi-improve-interation.git"
