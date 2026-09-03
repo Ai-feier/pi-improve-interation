@@ -4,7 +4,7 @@ English | [中文](./README.md)
 
 ## Summary
 
-A companion pi package that layers enhancements on top of interactions you already use — pi-native and upstream pi plugins alike. One idea only: keep the interactions you know, make them stronger.
+A companion pi package that layers enhancements on top of interactions you already use, whether pi-native or from upstream pi plugins. The interactions stay the same; they just get stronger.
 
 - No fork of upstream: public extension APIs only, so an upstream upgrade costs at most one adapter change
 - No parallel concepts: it enhances the `@` you already type and the work you already delegate
