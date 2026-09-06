@@ -65,16 +65,14 @@ test("mergeAgentEntries: later groups override earlier by name", () => {
 
 test("buildDelegationInstruction: with task and without task", () => {
 	const withTask = buildDelegationInstruction("reviewer", "  review my diff  ");
-	assert.match(
-		withTask,
-		/^Delegate to the reviewer subagent via the subagent tool\./,
-	);
-	assert.match(withTask, /Task: review my diff/);
-	assert.match(withTask, /decide the exact child prompt yourself/);
+	assert.match(withTask, /^\[Must\]/);
+	assert.match(withTask, /Select AGENTS: reviewer/);
+	assert.match(withTask, /Raw Message: review my diff/);
 
 	const withoutTask = buildDelegationInstruction("scout", "");
-	assert.match(withoutTask, /Task: not specified/);
-	assert.match(withoutTask, /ask me before delegating/);
+	assert.match(withoutTask, /Select AGENTS: scout/);
+	assert.match(withoutTask, /Raw Message:/);
+	assert.match(withoutTask, /no explicit task/);
 });
 
 function makeCurrent() {
@@ -192,11 +190,9 @@ test("input handler transforms @agent: mentions into delegation instructions", (
 		text: string;
 	};
 	assert.equal(transformed.action, "transform");
-	assert.match(
-		transformed.text,
-		/^Delegate to the reviewer subagent via the subagent tool\./,
-	);
-	assert.match(transformed.text, /Task: review my diff/);
+	assert.match(transformed.text, /^\[Must\]/);
+	assert.match(transformed.text, /Select AGENTS: reviewer/);
+	assert.match(transformed.text, /Raw Message: review my diff/);
 	assert.doesNotMatch(transformed.text, /@agent:/);
 
 	const passthrough = handler({ text: "hello world" }) as { action: string };
