@@ -67,11 +67,11 @@ test("buildDelegationInstruction: with task and without task", () => {
 	const withTask = buildDelegationInstruction("reviewer", "  review my diff  ");
 	assert.match(withTask, /^\[Must\]/);
 	assert.match(withTask, /Select AGENTS: reviewer/);
-	assert.match(withTask, /Raw Message: review my diff/);
+	assert.match(withTask, /User Request: \nreview my diff/);
 
 	const withoutTask = buildDelegationInstruction("scout", "");
 	assert.match(withoutTask, /Select AGENTS: scout/);
-	assert.match(withoutTask, /Raw Message:/);
+	assert.match(withoutTask, /User Request:/);
 	assert.match(withoutTask, /no explicit task/);
 });
 
@@ -192,7 +192,7 @@ test("input handler transforms @agent: mentions into delegation instructions", (
 	assert.equal(transformed.action, "transform");
 	assert.match(transformed.text, /^\[Must\]/);
 	assert.match(transformed.text, /Select AGENTS: reviewer/);
-	assert.match(transformed.text, /Raw Message: review my diff/);
+	assert.match(transformed.text, /User Request: \nreview my diff/);
 	assert.doesNotMatch(transformed.text, /@agent:/);
 
 	const passthrough = handler({ text: "hello world" }) as { action: string };

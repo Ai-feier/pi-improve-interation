@@ -28,6 +28,6 @@ export function buildDelegationInstruction(
 		"",
 		`Select AGENTS: ${agentName}`,
 		"",
-		`Raw Message: ${rawMessage}`,
+		`User Request: \n${rawMessage}`,
 	].join("\n");
 }
